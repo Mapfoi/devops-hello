@@ -1,5 +1,5 @@
-variable "yc_service_account_key" {
-  description = "API-ключ сервисного аккаунта Yandex Cloud"
+variable "yc_api_key" {
+  description = "API-ключ сервисного аккаунта (строка вида AQVN...)"
   sensitive   = true
 }
 
