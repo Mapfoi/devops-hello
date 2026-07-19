@@ -3,7 +3,7 @@ name: Deploy to Yandex Cloud
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch:  # Ручной запуск из интерфейса GitHub
+  workflow_dispatch:
 
 env:
   TF_VERSION: 1.5.0
@@ -14,33 +14,22 @@ jobs:
     timeout-minutes: 20
     
     steps:
-      # 1. Клонируем код
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Устанавливаем Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
-      # 3. Устанавливаем Docker
-      - name: Setup Docker
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y docker.io docker-compose
-          sudo systemctl start docker
-          sudo systemctl enable docker
-
-      # 4. Логинимся в Docker Hub
+      # Docker уже установлен на раннере, просто логинимся
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      # 5. Собираем и пушим Docker образ
       - name: Build and push Docker image
         run: |
           DOCKER_IMAGE="${{ secrets.DOCKER_USERNAME }}/devops-hello:${{ github.sha }}"
@@ -50,13 +39,11 @@ jobs:
           docker push "${{ secrets.DOCKER_USERNAME }}/devops-hello:latest"
           echo "DOCKER_IMAGE=$DOCKER_IMAGE" >> $GITHUB_ENV
 
-      # 6. Инициализируем Terraform
       - name: Terraform Init
         run: |
           cd terraform
           terraform init
 
-      # 7. Применяем Terraform (создаём инфраструктуру)
       - name: Terraform Apply
         run: |
           cd terraform
@@ -67,7 +54,6 @@ jobs:
             -var="docker_image=${{ secrets.DOCKER_USERNAME }}/devops-hello:${{ github.sha }}" \
             -var="db_password=${{ secrets.DB_PASSWORD }}"
 
-      # 8. Получаем IP адреса VM
       - name: Get VM IPs
         id: get_ips
         run: |
@@ -75,23 +61,18 @@ jobs:
           echo "APP_IP=$(terraform output -raw app_vm_ip)" >> $GITHUB_OUTPUT
           echo "MONITORING_IP=$(terraform output -raw monitoring_vm_ip)" >> $GITHUB_OUTPUT
 
-      # 9. Ждём, пока VM поднимется
       - name: Wait for VM
-        run: |
-          echo "⏳ Waiting for VM to be ready..."
-          sleep 60
+        run: sleep 60
 
-      # 10. Деплоим приложение на VM
       - name: Deploy application
         run: |
           APP_IP="${{ steps.get_ips.outputs.APP_IP }}"
           echo "📡 Deploying to $APP_IP"
           
-          # Добавляем known_hosts
           mkdir -p ~/.ssh
           ssh-keyscan -H $APP_IP >> ~/.ssh/known_hosts 2>/dev/null || true
           
-          # Ждём, пока SSH поднимется
+          # Ждём SSH
           for i in {1..30}; do
             if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no ubuntu@$APP_IP "echo 'SSH ready'" 2>/dev/null; then
               echo "✅ SSH ready after $i attempts"
@@ -101,7 +82,6 @@ jobs:
             sleep 10
           done
           
-          # Деплоим приложение
           ssh -o StrictHostKeyChecking=no ubuntu@$APP_IP << 'ENDSSH'
             sudo docker pull ${{ secrets.DOCKER_USERNAME }}/devops-hello:${{ github.sha }}
             sudo docker stop devops-app || true
@@ -114,7 +94,6 @@ jobs:
               ${{ secrets.DOCKER_USERNAME }}/devops-hello:${{ github.sha }}
           ENDSSH
 
-      # 11. Деплоим мониторинг
       - name: Deploy monitoring
         run: |
           MONITORING_IP="${{ steps.get_ips.outputs.MONITORING_IP }}"
@@ -122,17 +101,14 @@ jobs:
           
           ssh-keyscan -H $MONITORING_IP >> ~/.ssh/known_hosts 2>/dev/null || true
           
-          # Копируем файлы мониторинга
           scp -o StrictHostKeyChecking=no -r ./monitoring ubuntu@$MONITORING_IP:/opt/
           
-          # Запускаем мониторинг
           ssh -o StrictHostKeyChecking=no ubuntu@$MONITORING_IP << 'ENDSSH'
             cd /opt/monitoring
             sudo docker-compose down || true
             sudo docker-compose up -d
           ENDSSH
 
-      # 12. Выводим информацию о деплое
       - name: Deployment info
         run: |
           echo "=========================================="
