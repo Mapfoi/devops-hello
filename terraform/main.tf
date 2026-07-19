@@ -21,21 +21,21 @@ data "yandex_compute_image" "ubuntu" {
   family = "ubuntu-2204-lts"
 }
 
-resource "yandex_vpc_network" "app_network" {
-  name = "devops-app-network"
+# Используем существующую сеть "default"
+data "yandex_vpc_network" "default" {
+  name = "default"
 }
 
-resource "yandex_vpc_subnet" "app_subnet" {
-  name           = "devops-app-subnet"
-  zone           = var.yc_zone
-  network_id     = yandex_vpc_network.app_network.id
-  v4_cidr_blocks = ["10.0.1.0/24"]
+# Используем существующую подсеть в зоне var.yc_zone
+data "yandex_vpc_subnet" "default" {
+  name       = "default-${var.yc_zone}"
+  network_id = data.yandex_vpc_network.default.id
 }
 
 resource "yandex_mdb_postgresql_cluster" "app_db" {
   name        = "devops-db-cluster"
   environment = "PRESTABLE"
-  network_id  = yandex_vpc_network.app_network.id
+  network_id  = data.yandex_vpc_network.default.id
 
   config {
     version = "15"
@@ -48,7 +48,7 @@ resource "yandex_mdb_postgresql_cluster" "app_db" {
 
   host {
     zone      = var.yc_zone
-    subnet_id = yandex_vpc_subnet.app_subnet.id
+    subnet_id = data.yandex_vpc_subnet.default.id
     assign_public_ip = false
   }
 }
@@ -72,7 +72,7 @@ resource "yandex_compute_instance" "app_vm" {
   }
 
   network_interface {
-    subnet_id = yandex_vpc_subnet.app_subnet.id
+    subnet_id = data.yandex_vpc_subnet.default.id
     nat       = true
   }
 
@@ -126,7 +126,7 @@ resource "yandex_compute_instance" "monitoring_vm" {
   }
 
   network_interface {
-    subnet_id = yandex_vpc_subnet.app_subnet.id
+    subnet_id = data.yandex_vpc_subnet.default.id
     nat       = true
   }
 
