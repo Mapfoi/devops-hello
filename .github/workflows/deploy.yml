@@ -47,7 +47,7 @@ jobs:
         run: |
           cd terraform
           terraform apply -auto-approve \
-            -var="yc_api_key=${{ secrets.YC_API_KEY }}" \
+            -var="yc_token=${{ secrets.YC_TOKEN }}" \
             -var="yc_cloud_id=${{ secrets.YC_CLOUD_ID }}" \
             -var="yc_folder_id=${{ secrets.YC_FOLDER_ID }}" \
             -var="docker_image=${{ secrets.DOCKER_USERNAME }}/devops-hello:${{ github.sha }}" \

@@ -1,4 +1,4 @@
-variable "yc_api_key" {
+variable "yc_token" {
   description = "API-ключ сервисного аккаунта (строка вида AQVN...)"
   sensitive   = true
 }
