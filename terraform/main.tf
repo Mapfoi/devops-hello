@@ -16,6 +16,11 @@ provider "yandex" {
   zone      = var.yc_zone
 }
 
+# Получаем актуальный ID образа Ubuntu 22.04 LTS
+data "yandex_compute_image" "ubuntu" {
+  family = "ubuntu-2204-lts"
+}
+
 resource "yandex_vpc_network" "app_network" {
   name = "devops-app-network"
 }
@@ -61,8 +66,7 @@ resource "yandex_compute_instance" "app_vm" {
 
   boot_disk {
     initialize_params {
-      # Используем семейство образов вместо жесткого ID
-      image_family = "ubuntu-2204-lts"
+      image_id = data.yandex_compute_image.ubuntu.id
       size     = 20
     }
   }
@@ -116,7 +120,7 @@ resource "yandex_compute_instance" "monitoring_vm" {
 
   boot_disk {
     initialize_params {
-      image_family = "ubuntu-2204-lts"
+      image_id = data.yandex_compute_image.ubuntu.id
       size     = 20
     }
   }
