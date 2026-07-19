@@ -1,6 +1,6 @@
-variable "yc_service_account_key" {
-  description = "Содержимое JSON-файла с авторизованным ключом сервисного аккаунта"
-  sensitive   = true
+variable "yc_service_account_key_file" {
+  description = "Путь к JSON-файлу с авторизованным ключом сервисного аккаунта"
+  default     = ""
 }
 
 variable "yc_cloud_id" {
