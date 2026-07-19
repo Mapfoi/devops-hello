@@ -27,9 +27,9 @@ data "yandex_vpc_network" "default" {
 }
 
 # Используем существующую подсеть в зоне var.yc_zone
+# Просто ищем по имени (оно уникально в каталоге)
 data "yandex_vpc_subnet" "default" {
-  name       = "default-${var.yc_zone}"
-  network_id = data.yandex_vpc_network.default.id
+  name = "default-${var.yc_zone}"
 }
 
 resource "yandex_mdb_postgresql_cluster" "app_db" {
