@@ -26,3 +26,7 @@ variable "db_password" {
   sensitive   = true
   default     = "yc-DevOps-2024!"
 }
+
+variable "ssh_public_key" {
+  description = "Публичный SSH-ключ для доступа к VM"
+}

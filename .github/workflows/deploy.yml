@@ -23,7 +23,14 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
-      # Создаем JSON-файл с ключом из секрета
+      # Создаем файл с приватным SSH-ключом
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      # Создаем JSON-файл с ключом сервисного аккаунта
       - name: Create service account key file
         run: |
           mkdir -p /tmp
@@ -59,7 +66,8 @@ jobs:
             -var="yc_cloud_id=${{ secrets.YC_CLOUD_ID }}" \
             -var="yc_folder_id=${{ secrets.YC_FOLDER_ID }}" \
             -var="docker_image=${{ secrets.DOCKER_USERNAME }}/devops-hello:${{ github.sha }}" \
-            -var="db_password=${{ secrets.DB_PASSWORD }}"
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
 
       - name: Get VM IPs
         id: get_ips
@@ -76,9 +84,11 @@ jobs:
           APP_IP="${{ steps.get_ips.outputs.APP_IP }}"
           echo "📡 Deploying to $APP_IP"
           
-          mkdir -p ~/.ssh
-          ssh-keyscan -H $APP_IP >> ~/.ssh/known_hosts 2>/dev/null || true
+          # Добавляем ключ в ssh-agent
+          eval $(ssh-agent -s)
+          ssh-add ~/.ssh/id_rsa
           
+          # Ждём SSH
           for i in {1..30}; do
             if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no ubuntu@$APP_IP "echo 'SSH ready'" 2>/dev/null; then
               echo "✅ SSH ready after $i attempts"
@@ -105,7 +115,8 @@ jobs:
           MONITORING_IP="${{ steps.get_ips.outputs.MONITORING_IP }}"
           echo "📊 Deploying monitoring to $MONITORING_IP"
           
-          ssh-keyscan -H $MONITORING_IP >> ~/.ssh/known_hosts 2>/dev/null || true
+          eval $(ssh-agent -s)
+          ssh-add ~/.ssh/id_rsa
           
           scp -o StrictHostKeyChecking=no -r ./monitoring ubuntu@$MONITORING_IP:/opt/
           

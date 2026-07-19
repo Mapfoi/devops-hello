@@ -27,7 +27,6 @@ data "yandex_vpc_network" "default" {
 }
 
 # Используем существующую подсеть в зоне var.yc_zone
-# Просто ищем по имени (оно уникально в каталоге)
 data "yandex_vpc_subnet" "default" {
   name = "default-${var.yc_zone}"
 }
@@ -83,6 +82,8 @@ resource "yandex_compute_instance" "app_vm" {
         - name: ubuntu
           sudo: ALL=(ALL) NOPASSWD:ALL
           shell: /bin/bash
+          ssh_authorized_keys:
+            - ${var.ssh_public_key}
       
       write_files:
         - path: /etc/environment
@@ -137,6 +138,8 @@ resource "yandex_compute_instance" "monitoring_vm" {
         - name: ubuntu
           sudo: ALL=(ALL) NOPASSWD:ALL
           shell: /bin/bash
+          ssh_authorized_keys:
+            - ${var.ssh_public_key}
       
       packages:
         - docker.io
