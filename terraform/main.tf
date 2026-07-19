@@ -9,7 +9,6 @@ terraform {
 }
 
 provider "yandex" {
-  # Передаем путь к JSON-файлу с авторизованным ключом
   service_account_key_file = var.yc_service_account_key_file
   
   cloud_id  = var.yc_cloud_id
@@ -62,7 +61,8 @@ resource "yandex_compute_instance" "app_vm" {
 
   boot_disk {
     initialize_params {
-      image_id = "fd8tbvg3up1fg1gcn4ft"
+      # Используем семейство образов вместо жесткого ID
+      image_family = "ubuntu-2204-lts"
       size     = 20
     }
   }
@@ -116,7 +116,7 @@ resource "yandex_compute_instance" "monitoring_vm" {
 
   boot_disk {
     initialize_params {
-      image_id = "fd8tbvg3up1fg1gcn4ft"
+      image_family = "ubuntu-2204-lts"
       size     = 20
     }
   }
