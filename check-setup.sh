@@ -2,7 +2,6 @@
 
 echo "🔍 Проверка настроек проекта..."
 
-# Проверка наличия файлов
 echo "📁 Проверка структуры проекта..."
 for file in "app/app.py" "app/Dockerfile" "app/requirements.txt" "terraform/main.tf" "terraform/variables.tf" ".github/workflows/deploy.yml"; do
     if [ -f "$file" ]; then
@@ -12,7 +11,6 @@ for file in "app/app.py" "app/Dockerfile" "app/requirements.txt" "terraform/main
     fi
 done
 
-# Проверка Terraform синтаксиса
 echo ""
 echo "🔧 Проверка Terraform конфигурации..."
 cd terraform
@@ -24,7 +22,6 @@ else
     terraform fmt
 fi
 
-# Проверка Dockerfile
 echo ""
 echo "🐳 Проверка Dockerfile..."
 cd ../app
@@ -38,11 +35,3 @@ fi
 
 echo ""
 echo "✅ Проверка завершена!"
-echo ""
-echo "📝 Не забудьте настроить GitHub Secrets:"
-echo "  - YC_TOKEN (OAuth токен Yandex Cloud)"
-echo "  - YC_CLOUD_ID (ID облака)"
-echo "  - YC_FOLDER_ID (ID каталога)"
-echo "  - DOCKER_USERNAME (логин Docker Hub)"
-echo "  - DOCKER_TOKEN (токен доступа Docker Hub)"
-echo "  - DB_PASSWORD (пароль для БД)"

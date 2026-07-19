@@ -41,4 +41,4 @@ Thumbs.db
 # Project specific
 app/__pycache__/
 monitoring/prometheus_data/
-monitoring/grafana_data
+monitoring/grafana_data/

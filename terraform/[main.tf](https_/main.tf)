@@ -15,7 +15,6 @@ provider "yandex" {
   zone      = var.yc_zone
 }
 
-# --- VPC ---
 resource "yandex_vpc_network" "app_network" {
   name = "devops-app-network"
 }
@@ -27,7 +26,6 @@ resource "yandex_vpc_subnet" "app_subnet" {
   v4_cidr_blocks = ["10.0.1.0/24"]
 }
 
-# --- PostgreSQL Cluster ---
 resource "yandex_mdb_postgresql_cluster" "app_db" {
   name        = "devops-db-cluster"
   environment = "PRESTABLE"
@@ -36,7 +34,7 @@ resource "yandex_mdb_postgresql_cluster" "app_db" {
   config {
     version = "15"
     resources {
-      resource_preset_id = "s2.micro"  # 2 vCPU, 4GB RAM
+      resource_preset_id = "s2.micro"
       disk_size          = 20
       disk_type_id       = "network-hdd"
     }
@@ -49,7 +47,6 @@ resource "yandex_mdb_postgresql_cluster" "app_db" {
   }
 }
 
-# --- Application VM ---
 resource "yandex_compute_instance" "app_vm" {
   name        = "devops-app-vm"
   platform_id = "standard-v3"
@@ -63,14 +60,14 @@ resource "yandex_compute_instance" "app_vm" {
 
   boot_disk {
     initialize_params {
-      image_id = "fd8tbvg3up1fg1gcn4ft"  # Ubuntu 22.04 LTS
+      image_id = "fd8tbvg3up1fg1gcn4ft"
       size     = 20
     }
   }
 
   network_interface {
     subnet_id = yandex_vpc_subnet.app_subnet.id
-    nat       = true  # Публичный IP
+    nat       = true
   }
 
   metadata = {
@@ -104,7 +101,6 @@ resource "yandex_compute_instance" "app_vm" {
   depends_on = [yandex_mdb_postgresql_cluster.app_db]
 }
 
-# --- Monitoring VM ---
 resource "yandex_compute_instance" "monitoring_vm" {
   name        = "devops-monitoring-vm"
   platform_id = "standard-v3"
@@ -149,18 +145,14 @@ resource "yandex_compute_instance" "monitoring_vm" {
   }
 }
 
-# --- Outputs ---
 output "app_vm_ip" {
   value = yandex_compute_instance.app_vm.network_interface.0.nat_ip_address
-  description = "Публичный IP приложения"
 }
 
 output "monitoring_vm_ip" {
   value = yandex_compute_instance.monitoring_vm.network_interface.0.nat_ip_address
-  description = "Публичный IP мониторинга"
 }
 
 output "db_fqdn" {
   value = yandex_mdb_postgresql_cluster.app_db.host[0].fqdn
-  description = "FQDN базы данных"
 }
