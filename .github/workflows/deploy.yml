@@ -17,21 +17,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Debug directory structure
-        run: |
-          echo "=== Current directory ==="
-          pwd
-          echo "=== All files and folders ==="
-          ls -la
-          echo "=== Check app folder ==="
-          if [ -d "app" ]; then
-            echo "✅ app folder found!"
-            ls -la app/
-          else
-            echo "❌ app folder not found"
-            exit 1
-          fi
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -62,7 +47,7 @@ jobs:
         run: |
           cd terraform
           terraform apply -auto-approve \
-            -var="yc_token=${{ secrets.YC_TOKEN }}" \
+            -var="yc_service_account_key=${{ secrets.YC_SERVICE_ACCOUNT_KEY }}" \
             -var="yc_cloud_id=${{ secrets.YC_CLOUD_ID }}" \
             -var="yc_folder_id=${{ secrets.YC_FOLDER_ID }}" \
             -var="docker_image=${{ secrets.DOCKER_USERNAME }}/devops-hello:${{ github.sha }}" \

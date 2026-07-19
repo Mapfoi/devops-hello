@@ -1,5 +1,5 @@
-variable "yc_token" {
-  description = "OAuth токен для Yandex Cloud"
+variable "yc_service_account_key" {
+  description = "API-ключ сервисного аккаунта Yandex Cloud"
   sensitive   = true
 }
 

@@ -9,7 +9,13 @@ terraform {
 }
 
 provider "yandex" {
-  token     = var.yc_token
+  # Используем сервисный аккаунт через API-ключ
+  service_account_key_file = var.yc_service_account_key != "" ? null : null
+  service_account_key      = var.yc_service_account_key
+  
+  # Либо используем статический ключ
+  # service_account_key_file = "key.json"
+  
   cloud_id  = var.yc_cloud_id
   folder_id = var.yc_folder_id
   zone      = var.yc_zone
