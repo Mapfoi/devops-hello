@@ -127,7 +127,3 @@ jobs:
           echo "   Login: admin / admin"
           echo ""
           echo "=========================================="
-          
-        - name: Debug key file
-          run: |
-            cat /tmp/key.json | jq '.service_account_id'
