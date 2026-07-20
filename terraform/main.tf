@@ -16,17 +16,14 @@ provider "yandex" {
   zone      = var.yc_zone
 }
 
-# Получаем актуальный ID образа Ubuntu 22.04 LTS
 data "yandex_compute_image" "ubuntu" {
   family = "ubuntu-2204-lts"
 }
 
-# Используем существующую сеть "default"
 data "yandex_vpc_network" "default" {
   name = "default"
 }
 
-# Используем существующую подсеть в зоне var.yc_zone
 data "yandex_vpc_subnet" "default" {
   name = "default-${var.yc_zone}"
 }
@@ -76,14 +73,16 @@ resource "yandex_compute_instance" "app_vm" {
   }
 
   metadata = {
+    # Добавляем SSH-ключ напрямую (самый надёжный способ)
+    ssh-keys = "ubuntu:${var.ssh_public_key}"
+    
+    # user-data для установки Docker и настройки окружения
     user-data = <<-EOF
       #cloud-config
       users:
         - name: ubuntu
           sudo: ALL=(ALL) NOPASSWD:ALL
           shell: /bin/bash
-          ssh_authorized_keys:
-            - ${var.ssh_public_key}
       
       write_files:
         - path: /etc/environment
@@ -132,14 +131,14 @@ resource "yandex_compute_instance" "monitoring_vm" {
   }
 
   metadata = {
+    ssh-keys = "ubuntu:${var.ssh_public_key}"
+    
     user-data = <<-EOF
       #cloud-config
       users:
         - name: ubuntu
           sudo: ALL=(ALL) NOPASSWD:ALL
           shell: /bin/bash
-          ssh_authorized_keys:
-            - ${var.ssh_public_key}
       
       packages:
         - docker.io
