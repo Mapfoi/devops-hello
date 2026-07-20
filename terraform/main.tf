@@ -73,17 +73,10 @@ resource "yandex_compute_instance" "app_vm" {
   }
 
   metadata = {
-    # Добавляем SSH-ключ напрямую (самый надёжный способ)
     ssh-keys = "ubuntu:${var.ssh_public_key}"
     
-    # user-data для установки Docker и настройки окружения
     user-data = <<-EOF
       #cloud-config
-      users:
-        - name: ubuntu
-          sudo: ALL=(ALL) NOPASSWD:ALL
-          shell: /bin/bash
-      
       write_files:
         - path: /etc/environment
           content: |
@@ -135,11 +128,6 @@ resource "yandex_compute_instance" "monitoring_vm" {
     
     user-data = <<-EOF
       #cloud-config
-      users:
-        - name: ubuntu
-          sudo: ALL=(ALL) NOPASSWD:ALL
-          shell: /bin/bash
-      
       packages:
         - docker.io
         - docker-compose-v2
