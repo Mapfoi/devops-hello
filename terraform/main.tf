@@ -271,7 +271,7 @@ resource "yandex_compute_instance" "monitoring_vm" {
 
     subnet_id = data.yandex_vpc_subnet.default.id
 
-    nat = false
+    nat = true
 
   }
 
