@@ -2,81 +2,33 @@ name: Deploy to Yandex Cloud
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
   workflow_dispatch:
 
+concurrency:
+  group: terraform-deploy
+  cancel-in-progress: true
+
 env:
-  TF_VERSION: 1.5.0
+  TF_VERSION: "1.5.0"
 
 jobs:
-  infrastructure:
+
+################################################################################
+# BUILD DOCKER
+################################################################################
+
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+
     outputs:
-      app_ip: ${{ steps.get_ips.outputs.APP_IP }}
-      monitoring_ip: ${{ steps.get_ips.outputs.MONITORING_IP }}
-    
+      image: ${{ steps.image.outputs.image }}
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
-
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-
-      - name: Create service account key file
-        run: |
-          mkdir -p /tmp
-          echo '${{ secrets.YC_SERVICE_ACCOUNT_JSON }}' > /tmp/key.json
-          chmod 600 /tmp/key.json
-          echo "KEY_FILE=/tmp/key.json" >> $GITHUB_ENV
-
-      - name: Terraform Init
-        run: |
-          cd terraform
-          terraform init
-
-      - name: Terraform Apply
-        id: terraform_apply
-        run: |
-          cd terraform
-          terraform apply -auto-approve \
-            -var="yc_service_account_key_file=${{ env.KEY_FILE }}" \
-            -var="yc_cloud_id=${{ secrets.YC_CLOUD_ID }}" \
-            -var="yc_folder_id=${{ secrets.YC_FOLDER_ID }}" \
-            -var="docker_image=${{ secrets.DOCKER_USERNAME }}/devops-hello:latest" \
-            -var="db_password=${{ secrets.DB_PASSWORD }}" \
-            -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
-
-      - name: Get VM IPs
-        id: get_ips
-        run: |
-          cd terraform
-          echo "APP_IP=$(terraform output -raw app_vm_ip)" >> $GITHUB_OUTPUT
-          echo "MONITORING_IP=$(terraform output -raw monitoring_vm_ip)" >> $GITHUB_OUTPUT
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: infrastructure
-    timeout-minutes: 15
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -84,97 +36,270 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build Docker image
+        id: image
         run: |
-          DOCKER_IMAGE="${{ secrets.DOCKER_USERNAME }}/devops-hello:${{ github.sha }}"
-          docker build -t $DOCKER_IMAGE ./app
-          docker push $DOCKER_IMAGE
-          docker tag $DOCKER_IMAGE "${{ secrets.DOCKER_USERNAME }}/devops-hello:latest"
-          docker push "${{ secrets.DOCKER_USERNAME }}/devops-hello:latest"
-          echo "DOCKER_IMAGE=$DOCKER_IMAGE" >> $GITHUB_ENV
+          IMAGE=${{ secrets.DOCKER_USERNAME }}/devops-hello:${{ github.sha }}
 
-      - name: Deploy application
+          docker build \
+            -t $IMAGE \
+            ./app
+
+          docker tag \
+            $IMAGE \
+            ${{ secrets.DOCKER_USERNAME }}/devops-hello:latest
+
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ steps.image.outputs.image }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/devops-hello:latest
+
+################################################################################
+# TERRAFORM
+################################################################################
+
+  infrastructure:
+
+    needs: build
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 25
+
+    outputs:
+      app_ip: ${{ steps.outputs.outputs.app_ip }}
+      monitoring_ip: ${{ steps.outputs.outputs.monitoring_ip }}
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Create Service Account Key
+        run: |
+          mkdir -p /tmp
+
+          echo '${{ secrets.YC_SERVICE_ACCOUNT_JSON }}' > /tmp/key.json
+
+          chmod 600 /tmp/key.json
+
+          echo "KEY_FILE=/tmp/key.json" >> $GITHUB_ENV
+
+      - name: Configure S3 Backend
+        run: |
+          echo "AWS_ACCESS_KEY_ID=${{ secrets.YC_ACCESS_KEY }}" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.YC_SECRET_KEY }}" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        working-directory: terraform
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.YC_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.YC_SECRET_KEY }}
+        run: |
+          terraform init \
+            -reconfigure
+            
+      - name: Terraform Apply
+        working-directory: terraform
+        run: |
+          terraform apply \
+            -parallelism=1 \
+            -auto-approve \
+            -var="yc_service_account_key_file=${{ env.KEY_FILE }}" \
+            -var="yc_cloud_id=${{ secrets.YC_CLOUD_ID }}" \
+            -var="yc_folder_id=${{ secrets.YC_FOLDER_ID }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="docker_image=${{ needs.build.outputs.image }}" \
+            -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
+
+      - name: Get Outputs
+        id: outputs
+        working-directory: terraform
+        run: |
+          echo "app_ip=$(terraform output -raw app_vm_ip)" >> $GITHUB_OUTPUT
+          echo "monitoring_ip=$(terraform output -raw monitoring_vm_ip)" >> $GITHUB_OUTPUT
+
+################################################################################
+# DEPLOY
+################################################################################
+
+  deploy:
+
+    needs:
+      - build
+      - infrastructure
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 20
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Start ssh-agent
+        run: |
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_rsa
+
+      - name: Wait for application VM
         run: |
           APP_IP="${{ needs.infrastructure.outputs.app_ip }}"
-          echo "📡 Deploying to $APP_IP"
-          
-          eval $(ssh-agent -s)
-          ssh-add ~/.ssh/id_rsa
-          
+
+          echo "Waiting for $APP_IP"
+
           for i in {1..30}; do
-            if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no ubuntu@$APP_IP "echo 'SSH ready'" 2>/dev/null; then
-              echo "✅ SSH ready after $i attempts"
-              break
+
+            if ssh \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=5 \
+              ubuntu@$APP_IP \
+              "echo ready" >/dev/null 2>&1; then
+
+              echo "VM is ready."
+
+              exit 0
             fi
-            echo "⏳ Waiting for SSH... attempt $i/30"
+
             sleep 10
+
           done
+
+          echo "Timeout waiting for SSH"
+
+          exit 1
           
-          ssh -o StrictHostKeyChecking=no ubuntu@$APP_IP << 'ENDSSH'
-            if ! command -v docker &> /dev/null; then
-              echo "🐳 Docker not found, installing..."
-              sudo apt-get update -qq
-              sudo apt-get install -y -qq docker.io docker-compose-v2
-              sudo systemctl start docker
-              sudo systemctl enable docker
-              sudo usermod -aG docker ubuntu
-              echo "✅ Docker installed"
-            else
-              echo "✅ Docker already installed"
-            fi
-          ENDSSH
-          
-          ssh -o StrictHostKeyChecking=no ubuntu@$APP_IP << 'ENDSSH'
-            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/devops-hello:latest
-            sudo docker stop devops-app || true
-            sudo docker rm devops-app || true
-            sudo docker run -d \
-              --name devops-app \
-              --restart=always \
-              --env-file=/etc/environment \
-              -p 80:8080 \
+      - name: Deploy application container
+        run: |
+          APP_IP="${{ needs.infrastructure.outputs.app_ip }}"
+
+          echo "Deploying application to $APP_IP"
+
+          ssh \
+            -o StrictHostKeyChecking=no \
+            ubuntu@$APP_IP << EOF
+
+              sudo docker pull \
               ${{ secrets.DOCKER_USERNAME }}/devops-hello:latest
-          ENDSSH
 
-      - name: Deploy monitoring
+              sudo docker stop devops-app || true
+
+              sudo docker rm devops-app || true
+
+              sudo docker run -d \
+                --name devops-app \
+                --restart always \
+                --env-file=/etc/environment \
+                -p 80:8080 \
+                ${{ secrets.DOCKER_USERNAME }}/devops-hello:latest
+
+          EOF
+
+
+      - name: Wait for monitoring VM
         run: |
+
           MONITORING_IP="${{ needs.infrastructure.outputs.monitoring_ip }}"
-          echo "📊 Deploying monitoring to $MONITORING_IP"
-          
-          eval $(ssh-agent -s)
-          ssh-add ~/.ssh/id_rsa
-          
-          ssh -o StrictHostKeyChecking=no ubuntu@$MONITORING_IP << 'ENDSSH'
-            if ! command -v docker &> /dev/null; then
-              echo "🐳 Docker not found, installing..."
-              sudo apt-get update -qq
-              sudo apt-get install -y -qq docker.io docker-compose-v2
-              sudo systemctl start docker
-              sudo systemctl enable docker
-              sudo usermod -aG docker ubuntu
-              echo "✅ Docker installed"
-            else
-              echo "✅ Docker already installed"
-            fi
-          ENDSSH
-          
-          scp -o StrictHostKeyChecking=no -r ./monitoring ubuntu@$MONITORING_IP:/opt/
-          
-          ssh -o StrictHostKeyChecking=no ubuntu@$MONITORING_IP << 'ENDSSH'
-            cd /opt/monitoring
-            sudo docker-compose down || true
-            sudo docker-compose up -d
-          ENDSSH
 
-      - name: Deployment info
+          echo "Waiting for $MONITORING_IP"
+
+
+          for i in {1..30}; do
+
+            if ssh \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=5 \
+              ubuntu@$MONITORING_IP \
+              "echo ready" >/dev/null 2>&1; then
+
+              echo "Monitoring VM is ready."
+
+              exit 0
+
+            fi
+
+
+            sleep 10
+
+          done
+
+
+          echo "Timeout waiting for monitoring VM"
+
+          exit 1
+
+
+      - name: Deploy monitoring stack
         run: |
-          echo "=========================================="
-          echo "✅ DEPLOYMENT COMPLETED SUCCESSFULLY!"
-          echo "=========================================="
+
+          MONITORING_IP="${{ needs.infrastructure.outputs.monitoring_ip }}"
+
+
+          echo "Deploying monitoring to $MONITORING_IP"
+
+
+          scp \
+            -o StrictHostKeyChecking=no \
+            -r ./monitoring \
+            ubuntu@$MONITORING_IP:/opt/
+
+
+          ssh \
+            -o StrictHostKeyChecking=no \
+            ubuntu@$MONITORING_IP << EOF
+
+
+              cd /opt/monitoring
+
+
+              sudo docker-compose down || true
+
+
+              sudo docker-compose up -d
+
+
+          EOF
+
+
+      - name: Deployment information
+        run: |
+
+          echo "======================================"
+
+          echo "DEPLOYMENT COMPLETED"
+
+          echo "======================================"
+
           echo ""
-          echo "🌐 Application: http://${{ needs.infrastructure.outputs.app_ip }}"
-          echo "📊 Prometheus: http://${{ needs.infrastructure.outputs.monitoring_ip }}:9090"
-          echo "📈 Grafana: http://${{ needs.infrastructure.outputs.monitoring_ip }}:3000"
-          echo "   Login: admin / admin"
+
+          echo "Application:"
+          echo "http://${{ needs.infrastructure.outputs.app_ip }}"
+
           echo ""
-          echo "=========================================="
+
+          echo "Prometheus:"
+          echo "http://${{ needs.infrastructure.outputs.monitoring_ip }}:9090"
+
+          echo ""
+
+          echo "Grafana:"
+          echo "http://${{ needs.infrastructure.outputs.monitoring_ip }}:3000"
+
+          echo ""
+
+          echo "======================================"          
