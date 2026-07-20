@@ -79,25 +79,27 @@ resource "yandex_mdb_postgresql_cluster" "app_db" {
 
 }
 
+resource "yandex_mdb_postgresql_user" "app_user" {
+
+  cluster_id = yandex_mdb_postgresql_cluster.app_db.id
+
+  name = "user1"
+
+  password = var.db_password
+
+}
+
+
 resource "yandex_mdb_postgresql_database" "app_db" {
 
   cluster_id = yandex_mdb_postgresql_cluster.app_db.id
 
   name = "db1"
 
-}
-
-
-resource "yandex_mdb_postgresql_user" "app_user" {
-
-  cluster_id = yandex_mdb_postgresql_cluster.app_db.id
-
-  name     = "user1"
-  password = var.db_password
-
+  owner = yandex_mdb_postgresql_user.app_user.name
 
   depends_on = [
-    yandex_mdb_postgresql_database.app_db
+    yandex_mdb_postgresql_user.app_user
   ]
 
 }
@@ -210,7 +212,7 @@ resource "yandex_compute_instance" "app_vm" {
 
   depends_on = [
 
-    yandex_mdb_postgresql_user.app_user
+    yandex_mdb_postgresql_database.app_db
 
   ]
 
