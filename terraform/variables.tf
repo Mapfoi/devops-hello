@@ -1,32 +1,43 @@
 variable "yc_service_account_key_file" {
-  description = "Путь к JSON-файлу с авторизованным ключом сервисного аккаунта"
-  default     = ""
+  description = "Путь к JSON-файлу с ключом сервисного аккаунта Yandex Cloud"
+  type        = string
 }
+
 
 variable "yc_cloud_id" {
-  description = "ID облака в Yandex Cloud"
+  description = "ID облака Yandex Cloud"
+  type        = string
 }
 
+
 variable "yc_folder_id" {
-  description = "ID папки (каталога) в Yandex Cloud"
+  description = "ID каталога Yandex Cloud"
+  type        = string
 }
+
 
 variable "yc_zone" {
   description = "Зона доступности"
+  type        = string
   default     = "ru-central1-a"
 }
 
+
 variable "docker_image" {
   description = "Docker образ приложения"
-  default     = "your_dockerhub_username/devops-hello:latest"
+  type        = string
+  default     = ""
 }
+
 
 variable "db_password" {
-  description = "Пароль для базы данных"
+  description = "Пароль PostgreSQL"
+  type        = string
   sensitive   = true
-  default     = "yc-DevOps-2024!"
 }
 
+
 variable "ssh_public_key" {
-  description = "Публичный SSH-ключ для доступа к VM"
+  description = "Публичный SSH ключ пользователя ubuntu"
+  type        = string
 }
