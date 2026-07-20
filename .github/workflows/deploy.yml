@@ -9,9 +9,13 @@ env:
   TF_VERSION: 1.5.0
 
 jobs:
-  deploy:
+  # Этап 1: Инфраструктура (создается только если отсутствует)
+  infrastructure:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      app_ip: ${{ steps.get_ips.outputs.APP_IP }}
+      monitoring_ip: ${{ steps.get_ips.outputs.MONITORING_IP }}
     
     steps:
       - name: Checkout code
@@ -23,20 +27,58 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
-      # Создаем файл с приватным SSH-ключом
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-      # Создаем JSON-файл с ключом сервисного аккаунта
       - name: Create service account key file
         run: |
           mkdir -p /tmp
           echo '${{ secrets.YC_SERVICE_ACCOUNT_JSON }}' > /tmp/key.json
           chmod 600 /tmp/key.json
           echo "KEY_FILE=/tmp/key.json" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        run: |
+          cd terraform
+          terraform init
+
+      - name: Terraform Apply (Infrastructure)
+        id: terraform_apply
+        run: |
+          cd terraform
+          terraform apply -auto-approve \
+            -var="yc_service_account_key_file=${{ env.KEY_FILE }}" \
+            -var="yc_cloud_id=${{ secrets.YC_CLOUD_ID }}" \
+            -var="yc_folder_id=${{ secrets.YC_FOLDER_ID }}" \
+            -var="docker_image=${{ secrets.DOCKER_USERNAME }}/devops-hello:latest" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
+
+      - name: Get VM IPs
+        id: get_ips
+        run: |
+          cd terraform
+          echo "APP_IP=$(terraform output -raw app_vm_ip)" >> $GITHUB_OUTPUT
+          echo "MONITORING_IP=$(terraform output -raw monitoring_vm_ip)" >> $GITHUB_OUTPUT
+
+  # Этап 2: Сборка и деплой приложения (выполняется всегда)
+  deploy:
+    runs-on: ubuntu-latest
+    needs: infrastructure
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -53,38 +95,11 @@ jobs:
           docker push "${{ secrets.DOCKER_USERNAME }}/devops-hello:latest"
           echo "DOCKER_IMAGE=$DOCKER_IMAGE" >> $GITHUB_ENV
 
-      - name: Terraform Init
-        run: |
-          cd terraform
-          terraform init
-
-      - name: Terraform Apply
-        run: |
-          cd terraform
-          terraform apply -auto-approve \
-            -var="yc_service_account_key_file=${{ env.KEY_FILE }}" \
-            -var="yc_cloud_id=${{ secrets.YC_CLOUD_ID }}" \
-            -var="yc_folder_id=${{ secrets.YC_FOLDER_ID }}" \
-            -var="docker_image=${{ secrets.DOCKER_USERNAME }}/devops-hello:${{ github.sha }}" \
-            -var="db_password=${{ secrets.DB_PASSWORD }}" \
-            -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"
-
-      - name: Get VM IPs
-        id: get_ips
-        run: |
-          cd terraform
-          echo "APP_IP=$(terraform output -raw app_vm_ip)" >> $GITHUB_OUTPUT
-          echo "MONITORING_IP=$(terraform output -raw monitoring_vm_ip)" >> $GITHUB_OUTPUT
-
-      - name: Wait for VM
-        run: sleep 60
-
       - name: Deploy application
         run: |
-          APP_IP="${{ steps.get_ips.outputs.APP_IP }}"
+          APP_IP="${{ needs.infrastructure.outputs.app_ip }}"
           echo "📡 Deploying to $APP_IP"
           
-          # Добавляем ключ в ssh-agent
           eval $(ssh-agent -s)
           ssh-add ~/.ssh/id_rsa
           
@@ -98,8 +113,9 @@ jobs:
             sleep 10
           done
           
+          # Обновляем контейнер
           ssh -o StrictHostKeyChecking=no ubuntu@$APP_IP << 'ENDSSH'
-            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/devops-hello:${{ github.sha }}
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/devops-hello:latest
             sudo docker stop devops-app || true
             sudo docker rm devops-app || true
             sudo docker run -d \
@@ -107,12 +123,12 @@ jobs:
               --restart=always \
               --env-file=/etc/environment \
               -p 80:8080 \
-              ${{ secrets.DOCKER_USERNAME }}/devops-hello:${{ github.sha }}
+              ${{ secrets.DOCKER_USERNAME }}/devops-hello:latest
           ENDSSH
 
       - name: Deploy monitoring
         run: |
-          MONITORING_IP="${{ steps.get_ips.outputs.MONITORING_IP }}"
+          MONITORING_IP="${{ needs.infrastructure.outputs.monitoring_ip }}"
           echo "📊 Deploying monitoring to $MONITORING_IP"
           
           eval $(ssh-agent -s)
@@ -132,9 +148,9 @@ jobs:
           echo "✅ DEPLOYMENT COMPLETED SUCCESSFULLY!"
           echo "=========================================="
           echo ""
-          echo "🌐 Application: http://${{ steps.get_ips.outputs.APP_IP }}"
-          echo "📊 Prometheus: http://${{ steps.get_ips.outputs.MONITORING_IP }}:9090"
-          echo "📈 Grafana: http://${{ steps.get_ips.outputs.MONITORING_IP }}:3000"
+          echo "🌐 Application: http://${{ needs.infrastructure.outputs.app_ip }}"
+          echo "📊 Prometheus: http://${{ needs.infrastructure.outputs.monitoring_ip }}:9090"
+          echo "📈 Grafana: http://${{ needs.infrastructure.outputs.monitoring_ip }}:3000"
           echo "   Login: admin / admin"
           echo ""
           echo "=========================================="
