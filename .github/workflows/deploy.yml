@@ -273,11 +273,27 @@ jobs:
 
           EOF
 
+          APP_IP="${{ needs.infrastructure.outputs.app_ip }}"
+
+          export APP_IP
+
+          envsubst '${APP_IP}' < monitoring/prometheus.yml.template > /tmp/prometheus.yml
+
           # Копируем файлы проекта
           scp \
             -o StrictHostKeyChecking=no \
-            -r monitoring/* \
+            monitoring/docker-compose.yml \
             ubuntu@$MONITORING_IP:/opt/monitoring/
+
+          scp \
+            -o StrictHostKeyChecking=no \
+            -r monitoring/grafana \
+            ubuntu@$MONITORING_IP:/opt/monitoring/
+
+          scp \
+            -o StrictHostKeyChecking=no \
+            /tmp/prometheus.yml \
+            ubuntu@$MONITORING_IP:/opt/monitoring/prometheus.yml
 
           # Запускаем стек
           ssh \
