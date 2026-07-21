@@ -252,32 +252,47 @@ jobs:
          
       - name: Deploy monitoring stack
         run: |
-
           MONITORING_IP="${{ needs.infrastructure.outputs.monitoring_ip }}"
-
 
           echo "Deploying monitoring to $MONITORING_IP"
 
-
-          scp \
-            -o StrictHostKeyChecking=no \
-            -r ./monitoring \
-            ubuntu@$MONITORING_IP:/opt/
-
-
+          # Создаем каталог на сервере
           ssh \
             -o StrictHostKeyChecking=no \
-            ubuntu@$MONITORING_IP << EOF
+            ubuntu@$MONITORING_IP << 'EOF'
 
+            sudo mkdir -p /opt/monitoring
+            sudo chown -R ubuntu:ubuntu /opt/monitoring
 
-              cd /opt/monitoring
+            if ! command -v docker >/dev/null; then
+              sudo apt-get update
+              sudo apt-get install -y docker.io docker-compose-v2
+              sudo systemctl enable docker
+              sudo systemctl start docker
+            fi
 
+          EOF
 
-              sudo docker-compose down || true
+          # Копируем файлы проекта
+          scp \
+            -o StrictHostKeyChecking=no \
+            -r monitoring/* \
+            ubuntu@$MONITORING_IP:/opt/monitoring/
 
+          # Запускаем стек
+          ssh \
+            -o StrictHostKeyChecking=no \
+            ubuntu@$MONITORING_IP << 'EOF'
 
-              sudo docker-compose up -d
+            cd /opt/monitoring
 
+            docker compose pull || true
+
+            docker compose down || true
+
+            docker compose up -d
+
+            docker ps
 
           EOF
 

@@ -307,6 +307,8 @@ resource "yandex_compute_instance" "monitoring_vm" {
         - usermod -aG docker ubuntu
 
         - mkdir -p /opt/monitoring
+		
+		- chown -R ubuntu:ubuntu /opt/monitoring
 
     EOF
 
