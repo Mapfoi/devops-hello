@@ -1,0 +1,79 @@
+name: Destroy Yandex Cloud Infrastructure
+
+
+on:
+
+  workflow_dispatch:
+
+
+env:
+
+  TF_VERSION: "1.5.0"
+
+
+jobs:
+
+
+  destroy:
+
+
+    runs-on: ubuntu-latest
+
+
+    timeout-minutes: 30
+
+
+    steps:
+
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+
+          terraform_version: ${{ env.TF_VERSION }}
+
+          terraform_wrapper: false
+
+
+
+      - name: Create YC service account key
+        run: |
+
+          echo '${{ secrets.YC_SERVICE_ACCOUNT_JSON }}' > /tmp/key.json
+
+          chmod 600 /tmp/key.json
+
+
+
+      - name: Terraform Init
+        working-directory: terraform
+
+        env:
+
+          AWS_ACCESS_KEY_ID: ${{ secrets.YC_ACCESS_KEY }}
+
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.YC_SECRET_KEY }}
+
+        run: |
+
+          terraform init -reconfigure
+
+
+
+      - name: Terraform Destroy
+        working-directory: terraform
+
+        run: |
+
+          terraform destroy \
+            -auto-approve \
+            -var="yc_service_account_key_file=/tmp/key.json" \
+            -var="yc_cloud_id=${{ secrets.YC_CLOUD_ID }}" \
+            -var="yc_folder_id=${{ secrets.YC_FOLDER_ID }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="ssh_public_key=${{ secrets.SSH_PUBLIC_KEY }}"

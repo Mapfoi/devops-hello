@@ -106,6 +106,25 @@ resource "yandex_mdb_postgresql_database" "app_db" {
 
 
 ################################################################################
+# STATIC EXTERNAL IPs
+################################################################################
+
+
+resource "yandex_vpc_address" "app_ip" {
+
+  name = "devops-app-static-ip"
+
+}
+
+
+resource "yandex_vpc_address" "monitoring_ip" {
+
+  name = "devops-monitoring-static-ip"
+
+}
+
+
+################################################################################
 # APPLICATION VM
 ################################################################################
 
@@ -153,6 +172,8 @@ resource "yandex_compute_instance" "app_vm" {
     subnet_id = data.yandex_vpc_subnet.default.id
 
     nat = true
+
+    nat_ip_address = yandex_vpc_address.app_ip.external_ipv4_address[0].address
 
   }
 
@@ -273,6 +294,8 @@ resource "yandex_compute_instance" "monitoring_vm" {
 
     nat = true
 
+    nat_ip_address = yandex_vpc_address.monitoring_ip.external_ipv4_address[0].address
+
   }
 
 
@@ -334,7 +357,7 @@ resource "yandex_compute_instance" "monitoring_vm" {
 
 output "app_vm_ip" {
 
-  value = yandex_compute_instance.app_vm.network_interface[0].nat_ip_address
+  value = yandex_vpc_address.app_ip.external_ipv4_address[0].address
 
 }
 
@@ -342,7 +365,7 @@ output "app_vm_ip" {
 
 output "monitoring_vm_ip" {
 
-  value = yandex_compute_instance.monitoring_vm.network_interface[0].nat_ip_address
+  value = yandex_vpc_address.monitoring_ip.external_ipv4_address[0].address
 
 }
 

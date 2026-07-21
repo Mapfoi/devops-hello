@@ -34,3 +34,57 @@ Terraform автоматически создаёт (или использует
 При запуске Flask-приложение автоматически:
 - Подключается к PostgreSQL.
 - Создаёт таблицу
+
+## Environment Lifecycle
+
+### Deploy
+
+Создание всей инфраструктуры:
+
+```
+GitHub Actions
+      |
+      |
+Terraform Apply
+      |
+      |
+Yandex Cloud
+```
+
+### Stop
+
+Останавливает:
+
+```
+Application VM
+Monitoring VM
+```
+
+Но сохраняет:
+
+```
+Managed PostgreSQL
+Static IP addresses
+Terraform state
+```
+
+### Start
+
+Запускает:
+
+```
+Application VM
+Monitoring VM
+```
+
+С теми же IP.
+
+### Destroy
+
+Полностью удаляет:
+
+```
+VM
+PostgreSQL
+Network resources
+```
