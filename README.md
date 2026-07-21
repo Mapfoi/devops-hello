@@ -4,8 +4,9 @@
 Разработал и внедрил полноценный CI/CD-пайплайн для веб-приложения на Python (Flask) с PostgreSQL в облаке Yandex Cloud. Инфраструктура описана как код (Terraform), развертывание автоматизировано через GitHub Actions, мониторинг — Prometheus + Grafana. 
 
 ## 🛠 Использованные технологии
-| Категория | Технологи|
-|-|-|---------|------------|
+
+| Категория | Технологии |
+|-----------|------------|
 | **Инфраструктура как код** | Terraform, Yandex Cloud Provider, Managed PostgreSQL, Compute Cloud, VPC, Cloud-Init |
 | **CI/CD** | GitHub Actions, Docker Hub, SSH Deployment |
 | **Контейнеризация** | Docker, Docker Compose |
