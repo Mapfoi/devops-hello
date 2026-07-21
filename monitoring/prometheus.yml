@@ -5,7 +5,7 @@ global:
 scrape_configs:
   - job_name: 'flask-app'
     static_configs:
-      - targets: ['host.docker.internal:8080']
+      - targets: ['89.169.152.140']
     metrics_path: '/metrics'
 
   - job_name: 'prometheus'
