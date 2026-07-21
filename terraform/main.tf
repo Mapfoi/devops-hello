@@ -114,12 +114,20 @@ resource "yandex_vpc_address" "app_ip" {
 
   name = "devops-app-static-ip"
 
+  external_ipv4_address {
+    zone_id = var.yc_zone
+  }
+
 }
 
 
 resource "yandex_vpc_address" "monitoring_ip" {
 
   name = "devops-monitoring-static-ip"
+
+  external_ipv4_address {
+    zone_id = var.yc_zone
+  }
 
 }
 
