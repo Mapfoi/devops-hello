@@ -10,6 +10,8 @@ app = Flask(__name__)
 metrics = PrometheusMetrics(app)
 metrics.info('app_info', 'Application info', version='1.0.0')
 
+
+
 def get_db_connection():
     return psycopg2.connect(
         host=os.getenv('DB_HOST'),
@@ -29,7 +31,11 @@ def init_db():
                 count INTEGER DEFAULT 0
             );
         ''')
-        cur.execute("INSERT INTO visits (id, count) SELECT 1, 0 WHERE NOT EXISTS (SELECT 1 FROM visits);")
+        cur.execute("""
+            INSERT INTO visits (id, count)
+            VALUES (1, 0)
+            ON CONFLICT (id) DO NOTHING;
+        """)
         conn.commit()
         cur.close()
         conn.close()
@@ -37,6 +43,8 @@ def init_db():
     except Exception as e:
         print(f"DB init error: {e}")
         return False
+
+init_db()
 
 @app.route('/')
 def hello_world():
@@ -65,5 +73,4 @@ def health():
     return jsonify({"status": "healthy"})
 
 if __name__ == '__main__':
-    init_db()
     app.run(host='0.0.0.0', port=8080)
