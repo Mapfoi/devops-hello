@@ -50,6 +50,13 @@ jobs:
 
 
 
+      - name: Configure S3 Backend
+        run: |
+          echo "AWS_ACCESS_KEY_ID=${{ secrets.YC_ACCESS_KEY }}" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.YC_SECRET_KEY }}" >> $GITHUB_ENV
+
+
+
       - name: Terraform Init
         working-directory: terraform
 
@@ -67,6 +74,12 @@ jobs:
 
       - name: Terraform Destroy
         working-directory: terraform
+
+        env:
+
+          AWS_ACCESS_KEY_ID: ${{ secrets.YC_ACCESS_KEY }}
+
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.YC_SECRET_KEY }}
 
         run: |
 
