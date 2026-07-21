@@ -243,7 +243,13 @@ jobs:
 
           exit 1
 
-
+      - name: Check repository
+        run: |
+          pwd
+          ls -la
+          echo "-----"
+          find . -maxdepth 2 -type d
+         
       - name: Deploy monitoring stack
         run: |
 
